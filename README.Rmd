@@ -178,4 +178,14 @@ ggplot(MoreThan2DF, aes(x = Ha)) + geom_histogram(bins = nclass.Sturges(Forest_D
 
 ## Species area relationship
 
-to find a better solution at the amount of Hectares necessary for a plot to 
+to find a better solution at the amount of Hectares necessary for a forest patch to preserve biodiversity, several Species Area Relationship curves were fitted using the sars r package, for that we downloaded all presences of species from the forest polygons from GBIF from 1999 to 2023, and we solved for synonyms. When we look into that we find the following percentage of presences per kingdom:
+
+```{r tablePercentage}
+Species <- readRDS("Species.rds")
+
+Porp <- Species$kingdom |> table() |> prop.table()
+DF <- data.frame(Kingdom = names(Porp), Percentage = round(as.numeric(Porp)*100, 2)) |> dplyr::arrange(desc(Percentage))
+
+knitr::kable(DF)
+```
+
