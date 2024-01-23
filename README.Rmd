@@ -1,0 +1,181 @@
+---
+output: github_document
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  echo = F,
+  warning = F,
+  message = F,
+  error = F
+)
+library(sf)
+library(terra)
+library(geodata)
+library(tidyterra)
+library(ggplot2)
+library(dplyr)
+library(SDMWorkflows)
+library(rgbif)
+```
+
+# Klimaskovfond
+
+<!-- badges: start -->
+<!-- badges: end -->
+
+The goal of Klimaskovfond is to generate the needed data sets to get analize the Klimaskovfond score system
+
+
+```{r, cache=T}
+Forest <- terra::rast("o:/Nat_BDR-data/Arealanalyse/2023/CLEAN/Rasterized/Rast_AllForerst_Croped.tif") |> as.numeric()
+
+Desciduous <- terra::rast("o:/Nat_Ecoinformatics-tmp/JakobAssmann_au634851/treetype/treetype_bjer_dec.tif") 
+
+Conifer <- terra::rast("o:/Nat_Ecoinformatics-tmp/JakobAssmann_au634851/treetype/treetype_bjer_con.tif") 
+
+
+```
+```{r asPolygons, cache=T}
+Forest[Conifer== 1] <- NA
+
+Forest_Poly <-  as.polygons(Forest) |> aggregate(by = "C_02") |> 
+  disagg()
+Forest_Poly$ID <- 1:nrow(Forest_Poly)
+terra::writeVector(Forest_Poly, "Forest.shp", overwrite = T)
+sf::write_sf(st_as_sf(Forest_Poly), "Forest.geojson")
+```
+
+
+```{r, echo = F, eval = F}
+library(doParallel)
+library(foreach)
+require(doSNOW)
+library(data.table)
+
+cl <- makeSOCKcluster(50)
+
+Forest_Poly <- terra::vect("Forest_Area.shp")
+
+MoreThan2 <- Forest_Poly[Forest_Poly$Ha > 2,]
+
+MoreThan2DF <- as.data.frame(MoreThan2)
+MoreThan2DF$Richness <- NA
+
+terra::writeVector(MoreThan2, "MoreThan2.shp")
+
+doSNOW::registerDoSNOW(cl)
+
+pb <- txtProgressBar(min=1, max=nrow(MoreThan2DF), style=3)
+progress <- function(n) setTxtProgressBar(pb, n)
+opts <- list(progress=progress)
+#v
+Species <- foreach(i=1:nrow(MoreThan2DF), .packages = c("terra", "sf", "rgbif", "SDMWorkflows", "dplyr"), .options.snow=opts)%dopar% {
+  try({
+    MoreThan2 <- terra::vect("MoreThan2.shp")
+    WKT <- MoreThan2[i,]|>
+      terra::convHull() |>
+      terra::project("epsg:4326") |>
+      st_as_sf() |>
+      st_as_sfc() |>
+      st_as_text()
+
+    Test <- rgbif::occ_count(hasCoordinate = T,
+                             geometry = WKT,
+                             year = '1999,2023',
+                             facet="scientificName", facetLimit=10000)
+
+    Temp <- SDMWorkflows::Clean_Taxa(Taxons = Test$scientificName) |>
+      dplyr::select(kingdom, phylum, class, family, genus, species) |>
+      dplyr::distinct()
+
+    Temp$ID <- i
+    MoreThan2DF[i,]$Richness <- nrow(Temp)
+    message(paste(i, "of", nrow(MoreThan2DF) ,"ready", Sys.time()))
+    Temp
+
+  })
+}
+
+readr::write_csv(MoreThan2DF, "RichnessParallel.csv")
+stopCluster(cl)
+
+Species <- Species |> purrr::keep(is.data.frame) |> purrr::map(data.table::as.data.table) |> data.table::rbindlist()
+
+saveRDS(Species, "Species.rds")
+
+MoreThan2DF <- as.data.frame(MoreThan2) |> dplyr::select(Ha)
+MoreThan2DF$ID <- 1:nrow(MoreThan2DF)
+
+MoreThan2DF <- MoreThan2DF[MoreThan2DF$ID %in% unique(Species$ID),]
+
+Species_Animals_Plants <- Species[kingdom %chin% c("Animalia", "Plantae")]
+
+Species_Animals_Plants_N <- Species_Animals_Plants[, .N, by = ID]
+
+Species_Animals_Plants_N <- Species_Animals_Plants_N |> 
+  dplyr::left_join(MoreThan2DF)
+
+write_csv(Species_Animals_Plants_N, "Animals_plants_richness.csv")
+
+Species_Plants <- Species[kingdom %chin% c("Plantae")]
+
+Species_Plants_N <- Species_Plants[, .N, by = ID]
+
+Species_Plants_N <- Species_Plants_N |> 
+  dplyr::left_join(MoreThan2DF)
+
+write_csv(Species_Animals_Plants_N, "Plants_richness.csv")
+
+Species_Animals <- Species[kingdom %chin% c("Animalia")]
+
+Species_Animals_N <- Species_Animals[, .N, by = ID]
+
+Species_Animals_N <- Species_Animals_N |> 
+  dplyr::left_join(MoreThan2DF)
+
+write_csv(Species_Animals_N, "Animals_richness.csv")
+```
+
+
+```{r HaArea, cache=T}
+Forest_Poly <- terra::vect("Forest.shp")
+Forest_Poly$Ha <- terra::expanse(Forest_Poly, unit= "ha") |> round(3)
+terra::writeVector(Forest_Poly, "Forest_Area.shp", overwrite = T)
+sf::write_sf(st_as_sf(Forest_Poly), "Forest_Area.geojson")
+
+Forest_DF <- as.data.frame(Forest_Poly) |> dplyr::mutate(LogHa = log(Ha))
+```
+
+
+We have `r prettyNum(nrow(Forest_DF), big.mark = ",")` forest patches, whit are ranges from `r prettyNum(round(min(Forest_DF$Ha), 3), big.mark = ",")` to `r prettyNum(max(Forest_DF$Ha), big.mark = ",")` hectares, the distribution of areas can be seen here
+
+```{r histogramplot}
+ggplot(Forest_DF, aes(x = Ha)) + geom_histogram(bins = nclass.Sturges(Forest_DF$LogHa)) + scale_x_log10(labels = scales::comma) + scale_y_continuous(labels = scales::comma)
+```
+
+
+```{r, echo = F, cache=T}
+Forest_Poly <- terra::vect("Forest_Area.shp")
+
+MoreThan2 <- Forest_Poly[Forest_Poly$Ha > 2,]
+
+MoreThan2DF <- as.data.frame(MoreThan2)
+
+MoreThan2DF <- MoreThan2DF |> dplyr::mutate(LogHa = log(Ha))
+```
+
+
+however of those plots only `r prettyNum(nrow(MoreThan2DF), big.mark = ",")` of them correspond to plots with more than 2 Ha, we can see the distribution of those in the following plot
+
+```{r histogramplot2}
+ggplot(MoreThan2DF, aes(x = Ha)) + geom_histogram(bins = nclass.Sturges(Forest_DF$LogHa)) + scale_x_log10(labels = scales::comma) + scale_y_continuous(labels = scales::comma)
+```
+
+## Species area relationship
+
+to find a better solution at the amount of Hectares necessary for a plot to 
