@@ -21,6 +21,8 @@ library(ggplot2)
 library(dplyr)
 library(SDMWorkflows)
 library(rgbif)
+library(tidyverse)
+library(sars)
 ```
 
 # Klimaskovfond
@@ -129,7 +131,7 @@ Species_Plants_N <- Species_Plants[, .N, by = ID]
 Species_Plants_N <- Species_Plants_N |> 
   dplyr::left_join(MoreThan2DF)
 
-write_csv(Species_Animals_Plants_N, "Plants_richness.csv")
+write_csv(Species_Plants_N, "Plants_richness.csv")
 
 Species_Animals <- Species[kingdom %chin% c("Animalia")]
 
@@ -187,5 +189,296 @@ Porp <- Species$kingdom |> table() |> prop.table()
 DF <- data.frame(Kingdom = names(Porp), Percentage = round(as.numeric(Porp)*100, 2)) |> dplyr::arrange(desc(Percentage))
 
 knitr::kable(DF)
+```
+
+The same now including the 10 classes with the highest proportion of classes
+
+```{r tablePercentage2, echo = F}
+DF2 <- Species |> 
+  group_by(kingdom, phylum, class) |> 
+  summarise(n = n()) |> 
+  arrange(desc(n))
+
+Total <- sum(DF2$n)
+
+DF2 <- DF2 |> 
+  dplyr::mutate(Percentage = round(100*(n/Total), 2)) |> 
+  ungroup() |> 
+  dplyr::slice_max(order_by = Percentage, n = 10) |> 
+  dplyr::select(-n) |> 
+  dplyr::mutate(Cumulative_Percentage = cumsum(Percentage))
+
+knitr::kable(DF2)
+```
+
+Now we will do a species area relationship analysis for three different groups, first plants and animals together, then only plants, and finally only animals.
+
+## Plants and animals
+
+```{r mysarsfuncc, echo = F, cache=T}
+MySarsPlot <- function(x, type = "multi", allCurves = FALSE,
+                       pch = 16, cex = 1.2, pcol = "dodgerblue2", ModTitle = NULL,
+                       TiAdj = 0, TiLine = 0.5, cex.main = 1.5, cex.lab = 1.3, cex.axis = 1,
+                       yRange = NULL, lwd = 2, lcol = "dodgerblue2", mmSep = FALSE,
+                       lwd.Sep = 6, col.Sep = "black", pLeg = TRUE, modNames = NULL,
+                       cex.names = 0.88, subset_weights = NULL, confInt = FALSE)
+{
+  if (confInt) {
+    if (length(x$details$confInt) == 1)
+      stop("No confidence interval information in the fit object")
+    CI <- x$details$confInt
+  }
+  ic <- x[[2]]$ic
+  dat <- x$details$fits
+  dat2 <- dat
+  df <- dat[[1]]$data
+  xx <- df$A
+  yy <- df$S
+  nams <- vapply(dat2, function(x) x$model$name, FUN.VALUE = character(1))
+  xx2 <- seq(min(xx), max(xx), length.out = 1000)
+  mf <- lapply(dat2, function(y) {
+    if (y$model$name == "Linear model") {
+      c1 <- y$par[1]
+      m <- y$par[2]
+      ff <- c1 + (m * xx2)
+    }
+    else {
+      ff <- y$model$mod.fun(xx2, y$par)
+      if (anyNA(ff)) {
+        stop("Error in plotting, contact package owner")
+      }
+    }
+    ff
+  })
+  mf2 <- matrix(unlist(mf), ncol = length(dat2), byrow = FALSE)
+  mf2 <- as.data.frame(mf2)
+  colnames(mf2) <- nams
+  icv <- vapply(dat2, function(x) unlist(x[[ic]]), FUN.VALUE = double(1))
+  delt <- icv - min(icv)
+  akaikesum <- sum(exp(-0.5 * (delt)))
+  aw <- exp(-0.5 * delt)/akaikesum
+  if (round(sum(aw), 0) != 1)
+    stop("IC weights do not sum to 1")
+  mf3 <- matrix(nrow = nrow(mf2), ncol = ncol(mf2))
+  for (i in seq_along(aw)) mf3[, i] <- mf2[, i] * aw[i]
+  wfv <- rowSums(mf3)
+
+  nams2 <- nams
+  DF2 <- data.frame(Richness = wfv, Area = xx2)
+  CI$x <- df$A
+  G <- ggplot(DF2, aes(x = Area, y = Richness)) + geom_path() + theme_bw()
+  if(confInt){
+    G <- G + geom_ribbon(data = CI, aes(x = x, ymax = U, ymin = L))
+  }
+  print(G)
+  return(DF2)
+}
+```
+
+
+First we test this for plants and animals together
+
+```{r fitPlantAndAnimals, echo = F, cache=T}
+
+Richness <- read.csv("Animals_plants_richness.csv") |>
+  dplyr::filter(!is.na(N)) |>
+  dplyr::select(Ha, N)
+
+mm_Richness <- sar_average(data = Richness, verb = FALSE, confInt = F, display = F)
+```
+
+Here we can see the table of selected models:
+
+```{r table_Plants_Animals, echo = F}
+Sum <-  summary(mm_Richness)$Model_table
+
+Sum$CumWeight <- cumsum(Sum$Weight)
+knitr::kable(Sum)
+```
+
+and the plot of the relationship
+
+```{r plotAll}
+plot(mm_Richness, pLeg = TRUE, mmSep = TRUE, allCurves = F)
+```
+
+
+## Plants only
+
+Now we fit the same model but for plants only
+
+```{r fitPlant, echo = F, cache=T}
+
+Richness <- read.csv("Plants_richness.csv") |>
+  dplyr::filter(!is.na(N)) |>
+  dplyr::select(Ha, N)
+
+mm_Richness_plants <- sar_average(data = Richness, verb = FALSE, confInt = F, display = F)
+```
+
+Here we can see the table of selected models:
+
+```{r table_Plants, echo = F}
+Sum <-  summary(mm_Richness_plants)$Model_table
+
+Sum$CumWeight <- cumsum(Sum$Weight)
+knitr::kable(Sum)
+```
+
+and the plot of the model
+
+```{r plotPlants}
+plot(mm_Richness_plants, pLeg = TRUE, mmSep = TRUE, allCurves = F)
+```
+
+
+## Animals only
+
+Now we fit the same model but for Animals only
+
+
+```{r fitAnimals, echo = F, cache=T}
+
+Richness <- read.csv("Animals_richness.csv") |>
+  dplyr::filter(!is.na(N)) |>
+  dplyr::select(Ha, N)
+
+mm_Richness_animals <- sar_average(data = Richness, verb = FALSE, confInt = F,  display = F)
+```
+
+Here we can see the table of selected models:
+
+```{r table_animals, echo = F}
+Sum <-  summary(mm_Richness_animals)$Model_table
+
+Sum$CumWeight <- cumsum(Sum$Weight)
+knitr::kable(Sum)
+```
+
+and the plot of the model
+
+```{r plotanimals}
+plot(mm_Richness_animals, pLeg = TRUE, mmSep = TRUE, allCurves = F)
+```
+
+# Buffer and intersection generation
+
+## Tasks needed
+
+* Existing nature (A), add a 5 ha buffer, add jakob's Forest dataset
+* A = Existing nature
+* B = Jakobs Forest or Fredskov
+* Buffer ~5 Ha (225m) around B butcannot be part of A, and has to be a part of agriculture
+* For every buffer patch we calculate the contiguity with B and A patches and calculate total area and proportion of forest within A and B and add Lavbund proportion
+
+
+## Read A and plot
+
+```{r loadPackages}
+library(terra)
+library(geodata)
+library(ggplot2)
+library(tidyterra)
+library(BDRUtils)
+```
+
+## Existing Nature (A) and Forest (B) Datasets
+
+We begin by loading the existing nature dataset (A) and the dataset representing deciduous forest areas from Jakob Assmann's work, which we'll refer to as B.
+
+```{r ReadNatureandForest}
+# Read in Nature
+A <- terra::rast("o:/Nat_Sustain-proj/_user/derekCorcoran_au687614/biodiversitetsradet.github.io/Issue_20_BDR_KR/Class_A.tif")
+# Read in forest
+B <- terra::rast("o:/Nat_Ecoinformatics-tmp/JakobAssmann_au634851/treetype/treetype_bjer_dec.tif")
+```
+
+## Agricultural Land Dataset
+
+Next, we acquire the dataset that represents agricultural land in Denmark. This information is crucial, as we want to ensure that the newly created forested areas are restricted to the existing agricultural land.
+
+```{r Agriculture}
+# Read in the dataset representing agricultural land in Denmark
+Agriculture <- terra::rast("o:/Nat_BDR-data/Arealanalyse/2023/CLEAN/Rasterized/Rast_markblokkort_Croped.tif")
+```
+
+
+## Generating a Buffer around Deciduous Forest
+
+We generate a 225-meter buffer around the deciduous forest areas, approximating a 5-hectare squared region.
+
+
+```{r buffer225All, cache = TRUE}
+# Create a copy of the deciduous forest dataset (B)
+B_All <- B
+# Set all zero values to 1 to simplify buffer creation
+B_All[B_All == 0] <- 1
+# Generate a 225-meter buffer around the deciduous forest
+Buffer <- terra::buffer(B_All, 225)
+# Create a temporary copy of the buffer to handle modifications
+Temp <- Buffer
+# Set all values to NA in the temporary buffer
+values(Temp) <- NA
+# Exclude existing natural areas from the buffer
+Temp[Buffer] <- 1
+A <- terra::extend(A, terra::ext(Temp))
+Temp[!is.na(A)] <- NA
+# Exclude forested areas from the buffer
+Temp[!is.na(B_All)] <- NA
+# Ensure only agricultural areas remain in the buffer
+Temp[is.na(Agriculture)] <- NA
+# Save the resulting buffer as a COG (Cloud-Optimized GeoTIFF)
+BDRUtils::write_cog(Temp, "Buffer_all_225.tif")
+```
+
+This script creates a buffer around deciduous forest areas, ensuring it conforms to the specified conditions and constraints. The resulting buffer is then saved as a Cloud-Optimized GeoTIFF (COG) file named "Buffer_all_225.tif."
+
+We can now visualize all this categories
+
+```{r, echo = F, cache=TRUE}
+Buffer <- terra::rast("SpatialData/Buffer_all_225.tif")
+
+A <- terra::rast("o:/Nat_Sustain-proj/_user/derekCorcoran_au687614/biodiversitetsradet.github.io/Issue_20_BDR_KR/Class_A.tif")
+A <- as.numeric(A)
+A[A == 1] <- 2
+A <- terra::extend(A, Buffer)
+# Read in forest
+B <- terra::rast("o:/Nat_Ecoinformatics-tmp/JakobAssmann_au634851/treetype/treetype_bjer_dec.tif")
+B[!is.na(B)] <- 3
+
+A[is.na(A)] <- 0
+B[is.na(B)] <- 0
+Buffer[is.na(Buffer)] <- 0
+
+
+Final <- A+B+Buffer
+
+plot(Final)
+
+Final[Final == 0] <- NA
+
+plot(Final, colNA = "black")
+
+
+df <- data.frame(id = c(1,2,3,5), levels = c("Potential Forest", "Non-forest existing Nature", "Forest", "Forest in existing Nature"))
+
+
+levels(Final) <- df
+
+BDRUtils::write_cog(Final, "AllCategories.tif")
+
+ggplot() + geom_spatraster(data = Final, maxcell = 5e+06)
+```
+
+
+Now in order to calculate areas and adjacencies the raster will be transformed into polygons
+
+```{r ToShapefiles, cache=TRUE, eval = F}
+Buffer_all_225 <- terra::rast("AllCategories.tif")
+
+Buffer_all_225_SF <- as.polygons(Buffer_all_225) |> aggregate(by = "levels") |> 
+  disagg()
+Buffer_all_225_SF$ID <- 1:nrow(Buffer_all_225_SF)
+terra::writeVector(Buffer_all_225_SF, "Buffer_all_225_SF.shp", overwrite = T)
 ```
 

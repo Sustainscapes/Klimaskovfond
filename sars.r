@@ -4,7 +4,8 @@ Richness <- read.csv("Animals_plants_richness.csv") |>
   dplyr::filter(!is.na(N)) |>
   dplyr::select(Ha, N)
 
-mm_Richness <- sar_average(data = Richness, verb = FALSE, confInt = F)
+mm_Richness <- sar_average(data = Richness, verb = FALSE, confInt = F, normaTest = "lillie",
+                           homoTest = "cor.fitted")
 
 MySarsPlot <- function(x, type = "multi", allCurves = FALSE,
                        pch = 16, cex = 1.2, pcol = "dodgerblue2", ModTitle = NULL,
@@ -61,7 +62,7 @@ MySarsPlot <- function(x, type = "multi", allCurves = FALSE,
     G <- G + geom_ribbon(data = CI, aes(x = x, ymax = U, ymin = L))
   }
   print(G)
-  return(G)
+  return(DF2)
 }
 
 Sum <-  summary(mm_Richness)$Model_table
