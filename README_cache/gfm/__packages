@@ -6,3 +6,13 @@ ggplot2
 dplyr
 SDMWorkflows
 rgbif
+tidyverse
+tibble
+tidyr
+readr
+purrr
+stringr
+forcats
+lubridate
+sars
+BDRUtils

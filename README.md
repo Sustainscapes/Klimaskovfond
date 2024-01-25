@@ -9,24 +9,30 @@
 The goal of Klimaskovfond is to generate the needed data sets to get
 analize the Klimaskovfond score system
 
-We have 533,500 forest patches, whit are ranges from 0.01 to 1,228.918
-hectares, the distribution of areas can be seen here
+## Overview of Forest Patches
+
+We have a total of 533,500 forest patches, with sizes ranging from 0.01
+to 1,228.918 hectares. The distribution of forest patch areas is
+visualized below:
 
 ![](README_files/figure-gfm/histogramplot-1.png)<!-- -->
 
-however of those plots only 30,697 of them correspond to plots with more
-than 2 Ha, we can see the distribution of those in the following plot
+Next, let’s focus on forest patches larger than 2 hectares.
+
+Out of the total forest patches, only 30,697 correspond to patches
+larger than 2 hectares. The distribution of these larger patches is
+visualized below:
 
 ![](README_files/figure-gfm/histogramplot2-1.png)<!-- -->
 
-## Species area relationship
+## Species Area Relationship Analysis
 
-to find a better solution at the amount of Hectares necessary for a
-forest patch to preserve biodiversity, several Species Area Relationship
-curves were fitted using the sars r package, for that we downloaded all
-presences of species from the forest polygons from GBIF from 1999 to
-2023, and we solved for synonyms. When we look into that we find the
-following percentage of presences per kingdom:
+To determine the optimal forest patch size for biodiversity
+preservation, we conducted a Species Area Relationship analysis using
+the sars R package. The analysis utilized GBIF data on species presences
+within forest polygons from 1999 to 2023, resolving synonyms.
+
+The distribution of species across kingdoms is summarized below:
 
 | Kingdom   | Percentage |
 |:----------|-----------:|
@@ -37,8 +43,8 @@ following percentage of presences per kingdom:
 | Chromista |       0.02 |
 | Bacteria  |       0.01 |
 
-The same now including the 10 classes with the highest proportion of
-classes
+Additionally, we present the top 10 classes with the highest
+proportions:
 
 | kingdom  | phylum        | class           | Percentage | Cumulative_Percentage |
 |:---------|:--------------|:----------------|-----------:|----------------------:|
@@ -53,13 +59,12 @@ classes
 | Fungi    | Ascomycota    | Sordariomycetes |       1.01 |                 93.86 |
 | Plantae  | Tracheophyta  | Pinopsida       |       0.92 |                 94.78 |
 
-Now we will do a species area relationship analysis for three different
-groups, first plants and animals together, then only plants, and finally
-only animals.
+# Species Area Relationship for Different Groups
 
-## Plants and animals
+Now, we perform a species area relationship analysis for three groups:
+plants and animals together, plants only, and animals only.
 
-First we test this for plants and animals together
+Plants and Animals
 
 Here we can see the table of selected models:
 
@@ -196,7 +201,7 @@ buffer is then saved as a Cloud-Optimized GeoTIFF (COG) file named
 
 We can now visualize all this categories
 
-![](README_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->![](README_files/figure-gfm/unnamed-chunk-5-2.png)<!-- -->![](README_files/figure-gfm/unnamed-chunk-5-3.png)<!-- -->
+![](README_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
 
 Now in order to calculate areas and adjacencies the raster will be
 transformed into polygons

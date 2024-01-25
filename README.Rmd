@@ -153,13 +153,15 @@ sf::write_sf(st_as_sf(Forest_Poly), "Forest_Area.geojson")
 Forest_DF <- as.data.frame(Forest_Poly) |> dplyr::mutate(LogHa = log(Ha))
 ```
 
+## Overview of Forest Patches
 
-We have `r prettyNum(nrow(Forest_DF), big.mark = ",")` forest patches, whit are ranges from `r prettyNum(round(min(Forest_DF$Ha), 3), big.mark = ",")` to `r prettyNum(max(Forest_DF$Ha), big.mark = ",")` hectares, the distribution of areas can be seen here
+We have a total of `r prettyNum(nrow(Forest_DF), big.mark = ",")` forest patches, with sizes ranging from `r prettyNum(round(min(Forest_DF$Ha), 3), big.mark = ",")` to `r prettyNum(max(Forest_DF$Ha), big.mark = ",")` hectares. The distribution of forest patch areas is visualized below:
 
 ```{r histogramplot}
 ggplot(Forest_DF, aes(x = Ha)) + geom_histogram(bins = nclass.Sturges(Forest_DF$LogHa)) + scale_x_log10(labels = scales::comma) + scale_y_continuous(labels = scales::comma)
 ```
 
+Next, let's focus on forest patches larger than 2 hectares.
 
 ```{r, echo = F, cache=T}
 Forest_Poly <- terra::vect("Forest_Area.shp")
@@ -172,15 +174,17 @@ MoreThan2DF <- MoreThan2DF |> dplyr::mutate(LogHa = log(Ha))
 ```
 
 
-however of those plots only `r prettyNum(nrow(MoreThan2DF), big.mark = ",")` of them correspond to plots with more than 2 Ha, we can see the distribution of those in the following plot
+Out of the total forest patches, only `r prettyNum(nrow(MoreThan2DF), big.mark = ",")` correspond to patches larger than 2 hectares. The distribution of these larger patches is visualized below:
 
 ```{r histogramplot2}
 ggplot(MoreThan2DF, aes(x = Ha)) + geom_histogram(bins = nclass.Sturges(Forest_DF$LogHa)) + scale_x_log10(labels = scales::comma) + scale_y_continuous(labels = scales::comma)
 ```
 
-## Species area relationship
+## Species Area Relationship Analysis
 
-to find a better solution at the amount of Hectares necessary for a forest patch to preserve biodiversity, several Species Area Relationship curves were fitted using the sars r package, for that we downloaded all presences of species from the forest polygons from GBIF from 1999 to 2023, and we solved for synonyms. When we look into that we find the following percentage of presences per kingdom:
+To determine the optimal forest patch size for biodiversity preservation, we conducted a Species Area Relationship analysis using the sars R package. The analysis utilized GBIF data on species presences within forest polygons from 1999 to 2023, resolving synonyms.
+
+The distribution of species across kingdoms is summarized below: 
 
 ```{r tablePercentage}
 Species <- readRDS("Species.rds")
@@ -191,7 +195,7 @@ DF <- data.frame(Kingdom = names(Porp), Percentage = round(as.numeric(Porp)*100,
 knitr::kable(DF)
 ```
 
-The same now including the 10 classes with the highest proportion of classes
+Additionally, we present the top 10 classes with the highest proportions:
 
 ```{r tablePercentage2, echo = F}
 DF2 <- Species |> 
@@ -211,9 +215,12 @@ DF2 <- DF2 |>
 knitr::kable(DF2)
 ```
 
-Now we will do a species area relationship analysis for three different groups, first plants and animals together, then only plants, and finally only animals.
+# Species Area Relationship for Different Groups
 
-## Plants and animals
+Now, we perform a species area relationship analysis for three groups: plants and animals together, plants only, and animals only.
+
+Plants and Animals
+
 
 ```{r mysarsfuncc, echo = F, cache=T}
 MySarsPlot <- function(x, type = "multi", allCurves = FALSE,
@@ -275,8 +282,6 @@ MySarsPlot <- function(x, type = "multi", allCurves = FALSE,
 }
 ```
 
-
-First we test this for plants and animals together
 
 ```{r fitPlantAndAnimals, echo = F, cache=T}
 
@@ -453,12 +458,7 @@ Buffer[is.na(Buffer)] <- 0
 
 Final <- A+B+Buffer
 
-plot(Final)
-
 Final[Final == 0] <- NA
-
-plot(Final, colNA = "black")
-
 
 df <- data.frame(id = c(1,2,3,5), levels = c("Potential Forest", "Non-forest existing Nature", "Forest", "Forest in existing Nature"))
 
