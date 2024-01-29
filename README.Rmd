@@ -473,7 +473,7 @@ ggplot() + geom_spatraster(data = Final, maxcell = 5e+06)
 
 Now in order to calculate areas and adjacencies the raster will be transformed into polygons
 
-```{r ToShapefiles, cache=TRUE, eval = F}
+```{r ToShapefiles, cache=TRUE, eval = T}
 Buffer_all_225 <- terra::rast("AllCategories.tif")
 
 Buffer_all_225_SF <- as.polygons(Buffer_all_225) |> aggregate(by = "levels") |> 
@@ -482,3 +482,160 @@ Buffer_all_225_SF$ID <- 1:nrow(Buffer_all_225_SF)
 terra::writeVector(Buffer_all_225_SF, "Buffer_all_225_SF.shp", overwrite = T)
 ```
 
+Now to actually calculate the values we will first unite resolve for A and B join them in the largest possible polygons
+
+```{r uniteAB, cache = T}
+B <- terra::rast("o:/Nat_Ecoinformatics-tmp/JakobAssmann_au634851/treetype/treetype_bjer_dec.tif")
+B[!is.na(B)] <- 1
+A <- terra::rast("o:/Nat_Sustain-proj/_user/derekCorcoran_au687614/biodiversitetsradet.github.io/Issue_20_BDR_KR/Class_A.tif")
+A <- as.numeric(A)
+A <- terra::extend(A, B)
+
+A[is.na(A)] <- 0
+B[is.na(B)] <- 0
+
+AB <- A+B
+AB[AB > 0] <- 1
+AB[AB == 0] <- NA
+
+names(AB) <- "level"
+
+AB_SF <- as.polygons(AB) |> aggregate(by = "level") |> disagg()
+AB_SF$ID <- 1:nrow(AB_SF)
+terra::writeVector(AB_SF, "AB_SF.shp", overwrite = T)
+```
+Now we filter form the joint polygons only the ones with areas higher than 200 ha, 100 Ha, 50 Ha and 25 Ha
+
+```{r filter200ha, cache=TRUE}
+AB <- terra::vect("AB_SF.shp")
+AB$Ha <- terra::expanse(AB, unit = "ha")
+AB_25 <- AB[AB$Ha > 25,]
+
+terra::writeVector(AB_25, "AB_25.shp", overwrite = T)
+
+AB_50 <- AB_25[AB_25$Ha > 50,]
+terra::writeVector(AB_50, "AB_50.shp", overwrite = T)
+
+
+AB_100 <- AB_50[AB_50$Ha > 100,]
+terra::writeVector(AB_100, "AB_100.shp", overwrite = T)
+
+
+AB_200 <- AB_100[AB_100$Ha > 200,]
+terra::writeVector(AB_200, "AB_200.shp", overwrite = T)
+
+```
+
+
+Now we go one by one and we generate the potential forest content
+
+### 200 ha
+
+```{r potentialForest200ha, cache=TRUE}
+A <- terra::rast("o:/Nat_Sustain-proj/_user/derekCorcoran_au687614/biodiversitetsradet.github.io/Issue_20_BDR_KR/Class_A.tif")
+# Read in forest
+B <- terra::rast("o:/Nat_Ecoinformatics-tmp/JakobAssmann_au634851/treetype/treetype_bjer_dec.tif")
+
+B[!is.na(B)] <- 1
+Agriculture <- terra::rast("o:/Nat_BDR-data/Arealanalyse/2023/CLEAN/Rasterized/Rast_markblokkort_Croped.tif")
+
+AB_200 <- terra::vect("AB_200.shp")
+
+B_200 <- B |> 
+  terra::crop(AB_200) |> 
+  terra::mask(AB_200)
+
+Buffer_200_ha <- terra::buffer(B_200, 225)
+# Create a temporary copy of the buffer to handle modifications
+Temp <- Buffer_200_ha
+# Set all values to NA in the temporary buffer
+values(Temp) <- NA
+# Exclude existing natural areas from the buffer
+Temp[Buffer_200_ha] <- 1
+A <- terra::crop(A, terra::ext(Temp))
+Temp[!is.na(A)] <- NA
+# Exclude forested areas from the buffer
+B <- terra::crop(B, terra::ext(Temp))
+Temp[!is.na(B)] <- NA
+# Ensure only agricultural areas remain in the buffer
+Agriculture <- terra::crop(Agriculture, terra::ext(Temp))
+Temp[is.na(Agriculture)] <- NA
+names(Temp) <- "Patches"
+# Save the resulting buffer as a COG (Cloud-Optimized GeoTIFF)
+BDRUtils::write_cog(Temp, "potentialForest200ha.tif")
+```
+
+And now we transform this into polygons
+
+```{r ToShapefiles200ha, cache=TRUE, eval = T}
+potentialForest200ha <- terra::rast("potentialForest200ha.tif")
+
+potentialForest200ha_SF <- as.polygons(potentialForest200ha) |> aggregate(by = "Patches") |> 
+  disagg()
+potentialForest200ha_SF$ID <- 1:nrow(potentialForest200ha_SF)
+
+potentialForest200ha_SF$Ha <- terra::expanse(potentialForest200ha_SF, unit = "ha")
+
+terra::writeVector(potentialForest200ha_SF, "potentialForest200ha_SF.shp", overwrite = T)
+```
+
+We now we process the potential forest to add total area considering AB (Total_Area), the area of the potential forest is included (Ha), we caclulate the area of forest considering the adjacent A and B areas, Forest_Area
+
+```{r adjacency200, eval=FALSE}
+PotentialForest <- terra::vect("potentialForest200ha_SF.shp")
+
+AB_200 <- terra::vect("AB_200.shp")
+
+Test <- sf::st_touches(st_as_sf(terra::buffer(PotentialForest[1,],)), st_as_sf(AB_200))
+
+Test <- terra::nearby(PotentialForest[1:300,], AB_200,  distance = 50, centroids = F, symmetrical = F)
+```
+
+
+
+### 100 ha
+
+```{r potentialForest100ha, cache=TRUE}
+A <- terra::rast("o:/Nat_Sustain-proj/_user/derekCorcoran_au687614/biodiversitetsradet.github.io/Issue_20_BDR_KR/Class_A.tif")
+# Read in forest
+B <- terra::rast("o:/Nat_Ecoinformatics-tmp/JakobAssmann_au634851/treetype/treetype_bjer_dec.tif")
+
+B[!is.na(B)] <- 1
+Agriculture <- terra::rast("o:/Nat_BDR-data/Arealanalyse/2023/CLEAN/Rasterized/Rast_markblokkort_Croped.tif")
+
+AB_100 <- terra::vect("AB_100.shp")
+
+B_100 <- B |> 
+  terra::crop(AB_100) |> 
+  terra::mask(AB_100)
+
+Buffer_100_ha <- terra::buffer(B_100, 225)
+# Create a temporary copy of the buffer to handle modifications
+Temp <- Buffer_100_ha
+# Set all values to NA in the temporary buffer
+values(Temp) <- NA
+# Exclude existing natural areas from the buffer
+Temp[Buffer_100_ha] <- 1
+A <- terra::crop(A, terra::ext(Temp))
+Temp[!is.na(A)] <- NA
+# Exclude forested areas from the buffer
+B <- terra::crop(B, terra::ext(Temp))
+Temp[!is.na(B)] <- NA
+# Ensure only agricultural areas remain in the buffer
+Agriculture <- terra::crop(Agriculture, terra::ext(Temp))
+Temp[is.na(Agriculture)] <- NA
+names(Temp) <- "Patches"
+# Save the resulting buffer as a COG (Cloud-Optimized GeoTIFF)
+BDRUtils::write_cog(Temp, "potentialForest100ha.tif")
+```
+
+And now we transform this into polygons
+
+```{r ToShapefiles100ha, cache=TRUE, eval = T}
+potentialForest100ha <- terra::rast("potentialForest100ha.tif")
+
+potentialForest100ha_SF <- as.polygons(potentialForest100ha) |> aggregate(by = "Patches") |> 
+  disagg()
+potentialForest100ha_SF$ID <- 1:nrow(potentialForest100ha_SF)
+terra::writeVector(potentialForest100ha_SF, "potentialForest100ha_SF.shp", overwrite = T)
+```

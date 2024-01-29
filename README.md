@@ -205,3 +205,24 @@ We can now visualize all this categories
 
 Now in order to calculate areas and adjacencies the raster will be
 transformed into polygons
+
+Now to actually calculate the values we will first unite resolve for A
+and B join them in the largest possible polygons
+
+Now we filter form the joint polygons only the ones with areas higher
+than 200 ha, 100 Ha, 50 Ha and 25 Ha
+
+Now we go one by one and we generate the potential forest content
+
+### 200 ha
+
+And now we transform this into polygons
+
+We now we process the potential forest to add total area considering AB
+(Total_Area), the area of the potential forest is included (Ha), we
+caclulate the area of forest considering the adjacent A and B areas,
+Forest_Area
+
+### 100 ha
+
+And now we transform this into polygons
