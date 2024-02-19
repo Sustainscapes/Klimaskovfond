@@ -223,6 +223,9 @@ We now we process the potential forest to add total area considering AB
 caclulate the area of forest considering the adjacent A and B areas,
 Forest_Area
 
+    #> Error in PotentialForest$Total_Ha[i] <- PotentialForest$Ha[i] + AB_200[Temp$to_id,  : 
+    #>   replacement has length zero
+
 ### 100 ha
 
 And now we transform this into polygons

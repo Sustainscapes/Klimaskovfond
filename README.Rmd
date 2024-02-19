@@ -581,14 +581,30 @@ terra::writeVector(potentialForest200ha_SF, "potentialForest200ha_SF.shp", overw
 
 We now we process the potential forest to add total area considering AB (Total_Area), the area of the potential forest is included (Ha), we caclulate the area of forest considering the adjacent A and B areas, Forest_Area
 
-```{r adjacency200, eval=FALSE}
+```{r adjacency200, eval = T}
 PotentialForest <- terra::vect("potentialForest200ha_SF.shp")
+
+PotentialForest <-PotentialForest[PotentialForest$Ha > 5,]
+PotentialForest$Total_Ha <- NA
+PotentialForest$Ajdacent_AB_ID <- NA
+PotentialForest$Forest_Ha <- NA
 
 AB_200 <- terra::vect("AB_200.shp")
 
-Test <- sf::st_touches(st_as_sf(terra::buffer(PotentialForest[1,],)), st_as_sf(AB_200))
+B <- terra::rast("o:/Nat_Ecoinformatics-tmp/JakobAssmann_au634851/treetype/treetype_bjer_dec.tif")
 
-Test <- terra::nearby(PotentialForest[1:300,], AB_200,  distance = 50, centroids = F, symmetrical = F)
+B[!is.na(B)] <- 1
+
+for(i in 1:nrow(PotentialForest)){
+  try({
+    Temp <- terra::nearby(PotentialForest[i,], AB_200,  distance = 100, centroids = F, symmetrical = F) |> as.data.frame()
+  PotentialForest$Total_Ha[i] <- PotentialForest$Ha[i] + AB_200[Temp$to_id,]$Ha
+  PotentialForest$Ajdacent_AB_ID[i] <- paste(Temp$to_id, collapse = ", ")
+  PotentialForest$Forest_Ha[i] <- terra::crop(B,  AB_200[Temp$to_id,]) |> terra::mask(AB_200[Temp$to_id,]) |> freq() |> dplyr::filter(value == 1) |> dplyr::pull(count) |> magrittr::multiply_by(100) |> magrittr::multiply_by(0.0001)
+  })
+  
+}
+terra::writeVector(PotentialForest, "PotentialForest200Ha_param.shp")
 ```
 
 
